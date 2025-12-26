@@ -1,0 +1,44 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MWS Affiliate Platform</title>
+    <link rel="preconnect" href="https://radhkbocafjpglgmbpyy.supabase.co">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#1a237e',
+              'primary-dark': '#0f174d',
+              secondary: '#ffab00',
+              'secondary-light': '#ffd740',
+              accent: '#4caf50',
+              background: '#f1f5f9',
+              surface: '#ffffff',
+              'on-surface': '#1e293b',
+              'on-primary': '#ffffff',
+            }
+          }
+        }
+      }
+    </script>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "jszip": "https://esm.sh/jszip@3.10.1"
+  }
+}
+</script>
+</head>
+<body class="bg-background antialiased">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
