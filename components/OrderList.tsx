@@ -1,6 +1,5 @@
-
 import React, { useMemo, useState, useEffect, useRef, useCallback, memo } from 'react';
-import { Sale, SaleStatus, User, UserRole, Affiliate } from '../types';
+import { Sale, SaleStatus, User, UserRole, Affiliate, PlatformSettings } from '../types';
 import { WhatsAppIcon } from './icons/WhatsAppIcon';
 import { TruckIcon } from './icons/TruckIcon';
 import { RefreshIcon } from './icons/RefreshIcon';
@@ -8,6 +7,9 @@ import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { SearchIcon } from './icons/SearchIcon';
 import { CogIcon } from './icons/CogIcon';
+import { PlusIcon } from './icons/PlusIcon';
+// FIX: Added 'supabase' to the imports to resolve the "Cannot find name 'supabase'" error on line 200.
+import { syncSpediamoShipments, createTestOrder, supabase } from '../database';
 
 const OrderRow = memo(({ 
     sale, 
@@ -144,6 +146,7 @@ interface OrderListProps {
   onManageOrder: (sale: Sale) => void;
   user: User;
   affiliates: Affiliate[];
+  platformSettings: PlatformSettings;
   onOpenWhatsAppTemplateEditor: () => void;
   onRefreshData: () => Promise<void>;
   onShipOrder: (sale: Sale) => void;
@@ -158,11 +161,14 @@ const OrderList: React.FC<OrderListProps> = ({
     onShipOrder,
     user, 
     affiliates, 
+    platformSettings,
     onRefreshData, 
     onUpdateSaleStatus 
 }) => {
   const [filters, setFilters] = useState({ searchQuery: '', statusFilter: 'all' });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isCreatingTest, setIsCreatingTest] = useState(false);
 
   const filteredSales = useMemo(() => {
     let result = sales;
@@ -185,6 +191,44 @@ const OrderList: React.FC<OrderListProps> = ({
     setIsRefreshing(true);
     await onRefreshData();
     setIsRefreshing(false);
+  };
+
+  const handleCreateTest = async () => {
+      // Per creare un ordine serve un prodotto reale a cui associarlo. 
+      // Cerchiamo il primo prodotto attivo nel sistema.
+      try {
+        const { data: prods } = await supabase.from('products').select('id, name').eq('is_active', true).limit(1);
+        if (!prods || prods.length === 0) {
+            alert("Errore: devi prima creare almeno un prodotto attivo nel sistema per generare un ordine test.");
+            return;
+        }
+
+        setIsCreatingTest(true);
+        const res = await createTestOrder(prods[0].id, prods[0].name, user.id, user.name);
+        
+        if (res.success) {
+            await onRefreshData();
+            alert("Ordine di test creato con successo! Ora puoi testare il tasto 'Spedisci'.");
+        } else {
+            alert(`Errore creazione: ${res.error?.message}`);
+        }
+      } catch (e: any) {
+          alert(`Errore: ${e.message}`);
+      } finally {
+          setIsCreatingTest(false);
+      }
+  };
+
+  const handleSpediamoSync = async () => {
+      if (!platformSettings.spediamo_api_key) {
+          alert("Errore: Chiave API Spediamo.it non configurata nelle impostazioni.");
+          return;
+      }
+      setIsSyncing(true);
+      const res = await syncSpediamoShipments(sales, platformSettings.spediamo_api_key);
+      await onRefreshData();
+      setIsSyncing(false);
+      alert(`Sincronizzazione completata!\nOrdini aggiornati: ${res.updated}\nErrori riscontrati: ${res.errors}`);
   };
 
   const getStatusBadge = (status: SaleStatus) => {
@@ -221,6 +265,26 @@ const OrderList: React.FC<OrderListProps> = ({
             <p className="text-sm text-gray-500 mt-1">Gestione vendite e spedizioni ({filteredSales.length} risultati)</p>
         </div>
         <div className="flex gap-2">
+            {(user.role === UserRole.ADMIN || user.role === UserRole.LOGISTICS) && (
+                 <button 
+                    onClick={handleCreateTest} 
+                    disabled={isCreatingTest}
+                    className="flex items-center gap-2 bg-orange-600 text-white font-bold text-sm p-2 px-4 rounded-lg shadow-md hover:bg-orange-700 transition-all disabled:opacity-50"
+                >
+                    <PlusIcon className="w-4 h-4" />
+                    {isCreatingTest ? 'Creazione...' : 'Crea Ordine Test'}
+                </button>
+            )}
+            {platformSettings.spediamo_api_key && (user.role === UserRole.ADMIN || user.role === UserRole.LOGISTICS) && (
+                 <button 
+                    onClick={handleSpediamoSync} 
+                    disabled={isSyncing} 
+                    className="flex items-center gap-2 bg-indigo-50 p-2 px-4 rounded-lg shadow-sm hover:bg-indigo-100 border border-indigo-200 transition-all disabled:opacity-50 font-bold text-sm text-indigo-700"
+                >
+                    <TruckIcon className={`w-4 h-4 ${isSyncing ? 'animate-bounce' : ''}`} /> 
+                    {isSyncing ? 'Sincronizzando Spediamo...' : 'Sincronizza Stati Spediamo'}
+                </button>
+            )}
             <button 
                 onClick={handleRefresh} 
                 disabled={isRefreshing} 

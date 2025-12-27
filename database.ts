@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Product, Affiliate, Manager, LogisticsUser, CustomerCareUser, Sale, Notification, Ticket, TicketReply, Transaction, User, UserRole, TicketStatus, Admin, PlatformSettings, StockExpense } from './types';
+import { Product, Affiliate, Manager, LogisticsUser, CustomerCareUser, Sale, Notification, Ticket, TicketReply, Transaction, User, UserRole, TicketStatus, Admin, PlatformSettings, StockExpense, SaleStatus } from './types';
 
 const supabaseUrl = 'https://radhkbocafjpglgmbpyy.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhZGhrYm9jYWZqcGdsZ21icHl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1NzcwNDcsImV4cCI6MjA4MjE1MzA0N30.BtUupmNUJ1CA8X8FGRSyh6VgNXLSYM-WrajbsUED5FM';
@@ -237,7 +237,6 @@ export const addProduct = async (product: Partial<Product>) => {
         name: product.name,
         description: product.description,
         price: product.price,
-        // FIX: Changed product.commission_value to product.commissionValue to match the Product interface definition.
         commission_value: product.commissionValue,
         image_url: product.imageUrl,
         gallery_image_urls: product.galleryImageUrls,
@@ -438,3 +437,82 @@ export const updateTicketStatus = (ticketId: string, status: TicketStatus) =>
     supabase.from('tickets').update({ status, updated_at: new Date().toISOString() }).eq('id', ticketId);
 
 export const signOut = () => supabase.auth.signOut();
+
+/**
+ * SINCRONIZZAZIONE PROFESSIONALE TRAMITE EDGE FUNCTION
+ */
+export const syncSpediamoShipments = async (sales: Sale[], apiKey: string) => {
+    const shippableStatuses: SaleStatus[] = ['Spedito', 'Giacenza', 'Svincolato'];
+    const targets = sales.filter(s => shippableStatuses.includes(s.status) && s.trackingCode);
+    
+    if (targets.length === 0 || !apiKey) return { updated: 0, errors: 0 };
+
+    let updatedCount = 0;
+    let errorCount = 0;
+
+    for (const sale of targets) {
+        try {
+            const tracking = (sale.trackingCode || '').trim();
+            if (!tracking) continue;
+
+            console.log(`SYNC_RETRY: Richiesta stato per tracking ${tracking}...`);
+            
+            const { data, error } = await supabase.functions.invoke('spediamo-proxy', {
+                body: { 
+                    action: 'get-shipment', 
+                    apiKey: apiKey.trim(), 
+                    trackingCode: tracking 
+                }
+            });
+
+            if (error) {
+                console.error(`SYNC_API_ERROR (${tracking}):`, error);
+                errorCount++; 
+                continue; 
+            }
+
+            const newStatus = data?.platformStatus as SaleStatus;
+            
+            if (newStatus && newStatus !== sale.status) {
+                await updateSale(sale.id, { 
+                    status: newStatus, 
+                    statusUpdatedAt: new Date().toISOString() 
+                });
+                updatedCount++;
+            }
+        } catch (e) {
+            console.error("UNEXPECTED_SYNC_EXCEPTION:", e);
+            errorCount++;
+        }
+    }
+    return { updated: updatedCount, errors: errorCount };
+};
+
+/**
+ * Helper per creare un ordine di test pre-compilato
+ */
+export const createTestOrder = async (productId: string, productName: string, affiliateId: string, affiliateName: string) => {
+    const testId = `TEST-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const { error } = await supabase.from('sales').insert({
+        id: testId,
+        product_id: productId,
+        product_name: productName,
+        affiliate_id: affiliateId,
+        affiliate_name: affiliateName,
+        sale_amount: 10.00,
+        commission_amount: 5.00,
+        quantity: 1,
+        status: 'Confermato', // Impostato su confermato così da poter essere spedito subito
+        customer_name: 'Mario Rossi Test',
+        customer_email: 'test@mwsplatform.it',
+        customer_phone: '3331234567',
+        customer_street_address: 'Via Roma',
+        customer_house_number: '1',
+        customer_city: 'Milano',
+        customer_province: 'MI',
+        customer_zip: '20121',
+        sale_date: new Date().toISOString(),
+        notes: 'ORDINE DI TEST PER VERIFICA LOGISTICA SPEDIAMO.IT'
+    });
+    return { success: !error, error };
+};

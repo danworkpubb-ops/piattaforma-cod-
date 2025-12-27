@@ -32,7 +32,7 @@ const AffiliateForm = lazy(() => import('./components/AffiliateForm'));
 const CustomerContactModal = lazy(() => import('./components/CustomerContactModal'));
 const WhatsAppTemplateModal = lazy(() => import('./components/WhatsAppTemplateModal'));
 const LogisticsOrderModal = lazy(() => import('./components/LogisticsOrderModal'));
-const SpediamoModal = lazy(() => import('./components/SpediamoModal')); // Nuovo lazy import
+const SpediamoModal = lazy(() => import('./components/SpediamoModal'));
 
 const ViewLoader = () => (
     <div className="flex justify-center items-center h-64">
@@ -224,7 +224,7 @@ function App() {
                 {view === 'dashboard' && <Dashboard user={user} products={products} affiliates={affiliates} sales={allVisibleSales} notifications={notifications} />}
                 {view === 'products' && <ProductList products={products} userRole={user.role} niches={niches} onAddProduct={() => { setEditingProduct(null); setIsProductFormOpen(true); }} onEditProduct={(p) => { setEditingProduct(p); setIsProductFormOpen(true); }} onDeleteProduct={async (id) => { if(confirm('Eliminare?')){ await db.deleteProduct(id); fetchData(); }}} onViewProduct={(p) => { setViewingProduct(p); setView('product-detail'); }} onOpenNicheManager={() => setIsNicheModalOpen(true)} />}
                 {view === 'product-detail' && viewingProduct && <ProductDetail product={viewingProduct} userRole={user.role} affiliates={affiliates} sales={allVisibleSales} currentAffiliate={user.role === UserRole.AFFILIATE ? (user as Affiliate) : undefined} onBack={() => setView('products')} onEdit={(p) => { setEditingProduct(p); setIsProductFormOpen(true); }} platformSettings={platformSettings} />}
-                {view === 'orders' && <OrderList user={user} sales={allVisibleSales} affiliates={allUsersWithBalance as any} onViewOrder={setViewingOrder} onContactCustomer={setContactingOrder} onShipOrder={setShippingOrder} onManageOrder={()=>{}} onOpenWhatsAppTemplateEditor={() => setIsWhatsAppModalOpen(true)} onRefreshData={fetchData} 
+                {view === 'orders' && <OrderList user={user} sales={allVisibleSales} affiliates={allUsersWithBalance as any} platformSettings={platformSettings} onViewOrder={setViewingOrder} onContactCustomer={setContactingOrder} onShipOrder={setShippingOrder} onManageOrder={()=>{}} onOpenWhatsAppTemplateEditor={() => setIsWhatsAppModalOpen(true)} onRefreshData={fetchData} 
                   onUpdateSaleStatus={async (id, s) => { 
                     const updates: any = { status: s, statusUpdatedAt: new Date().toISOString() };
                     await db.updateSale(id, updates); 
